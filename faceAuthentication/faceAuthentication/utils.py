@@ -174,9 +174,12 @@ def classify_image(image_path):
     predicted_class_name = index_to_class[predicted_class_index]
     print(f"Predicted class: {predicted_class_name}")
 
+    return predicted_class_name
+
 
 LOCK_FILE = os.path.join(settings.BASE_DIR, 'register_user.lock')
 
+import uuid
 
 @csrf_exempt
 def register_user(request):
@@ -241,4 +244,66 @@ def register_user(request):
             if os.path.exists(LOCK_FILE):
                 os.remove(LOCK_FILE)
 
+    return HttpResponse("Invalid request method", status=405)
+
+@csrf_exempt
+def authenticate_user(request):
+    if request.method == 'POST':
+        if os.path.exists(LOCK_FILE):
+            return HttpResponse("La méthode est déjà en cours d'exécution", status=429)
+
+        try:
+            with open(LOCK_FILE, 'w') as lock:
+                lock.write('locked')
+
+            pass_phrase = request.POST.get('pass_phrase')
+            photo = request.FILES.get('photo')
+
+            if not pass_phrase:
+                return HttpResponse("Missing pass_phrase field", status=400)
+
+            if not photo:
+                return HttpResponse("Missing photo field", status=400)
+
+            random_uuid = uuid.uuid4()
+            random_number = random_uuid.int
+
+            photo_name = f"{random_number}.png"
+            photo_path = os.path.join('temp', photo_name)
+
+            if not os.path.exists('temp'):
+                os.makedirs('temp')
+
+            with open(photo_path, 'wb+') as destination:
+                for chunk in photo.chunks():
+                    destination.write(chunk)
+
+            model = classify_image(photo_path)
+
+            if model is None:
+                return HttpResponse("Image classification failed", status=500)
+
+            try:
+                user = User.objects.get(username=model)
+                if user.pass_phrase == pass_phrase:
+                    return HttpResponse(f"Successfully authenticated as {model}", status=200)
+                else:
+                    return HttpResponse("Wrong passphrase", status=200)
+            except User.DoesNotExist:
+                return HttpResponse("User not found", status=404)
+
+        except OperationalError as e:
+            return HttpResponse(f"Database error: {str(e)}", status=500)
+        except Exception as e:
+            return HttpResponse(f"An error occurred: {str(e)}", status=500)
+        finally:
+            # Ensure LOCK_FILE is removed even if an exception occurs
+            if os.path.exists(LOCK_FILE):
+                os.remove(LOCK_FILE)
+
+            # Remove the image file from the temp directory
+            if os.path.exists(photo_path):
+                os.remove(photo_path)
+
+    # Ensure that the response is returned if the method is not POST
     return HttpResponse("Invalid request method", status=405)

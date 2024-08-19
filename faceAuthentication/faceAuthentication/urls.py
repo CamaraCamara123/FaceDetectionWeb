@@ -17,10 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from faceAuthentication.api_methods import train
-from faceAuthentication.api_methods import register
+from faceAuthentication.api_methods import register,authenticate
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('makeModel/',train.make_the_model,name="Test the API"),
-    path('register', register.register_user, name='register_user')
+    path('register', register.register_user, name='register_user'),
+    path('authenticate', authenticate.authenticate_user, name='authenticate_user')
 ]
